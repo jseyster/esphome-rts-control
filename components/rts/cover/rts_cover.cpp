@@ -16,11 +16,11 @@ void RTSCover::setup() {
 
     // Choose a random channel and random start point for the rolling code. The code always starts
     // from the lower half of possible values, because I haven't tested that rollover works :).
-    this->rts_channel_.channelId = static_cast<uint16_t>(random_uint32());
-    this->rts_channel_.rollingCode = 0x7fff & static_cast<uint16_t>(random_uint32());
+    this->rts_channel_.channel_id = static_cast<uint16_t>(random_uint32());
+    this->rts_channel_.rolling_code = 0x7fff & static_cast<uint16_t>(random_uint32());
   }
   ESP_LOGI(TAG, "Initialized RTS cover %s with channel id 0x%x; next rolling code value is %u", this->name_.c_str(),
-           this->rts_channel_.channelId, this->rts_channel_.rollingCode);
+           this->rts_channel_.channel_id, this->rts_channel_.rolling_code);
 
   switch (this->restore_mode_) {
     case COVER_NO_RESTORE:
@@ -50,31 +50,61 @@ cover::CoverTraits RTSCover::get_traits() {
   return traits;
 }
 
+void RTSCover::send_program_command() {
+  auto code = consume_rolling_code_value_();
+  ESP_LOGW(TAG, "Program call with code %u to RTS cover component %s", code, this->name_.c_str());
+}
+
+void RTSCover::config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code) {
+  if (channel_id.has_value()) {
+    ESP_LOGI(TAG, "Assigning new channel id to RTS cover component %s: previously %x, now %x", this->name_.c_str(),
+             this->rts_channel_.channel_id, channel_id.value());
+    this->rts_channel_.channel_id = channel_id.value();
+  }
+  if (rolling_code.has_value()) {
+    ESP_LOGI(TAG, "Updating next rolling code value for RTS cover component %s: previously %u, now %u",
+             this->name_.c_str(), this->rts_channel_.rolling_code, rolling_code.value());
+    this->rts_channel_.rolling_code = rolling_code.value();
+  }
+  if (!channel_id.has_value() && !rolling_code.has_value()) {
+    ESP_LOGW(TAG, "RTS cover component %s received no-op 'config_channel' action", this->name_.c_str());
+  }
+
+  this->persist_channel_state_();
+}
+
 void RTSCover::control(const cover::CoverCall &call) {
   auto position = call.get_position();
   if (position && *position == cover::COVER_OPEN) {
-    auto code = consumeRollingCodeValue();
+    auto code = consume_rolling_code_value_();
     ESP_LOGW(TAG, "Open call with code %u to RTS cover component %s", code, this->name_.c_str());
   } else if (position && *position == cover::COVER_CLOSED) {
-    auto code = consumeRollingCodeValue();
+    auto code = consume_rolling_code_value_();
     ESP_LOGW(TAG, "Close call with code %u to RTS cover component %s", code, this->name_.c_str());
   } else if (call.get_stop()) {
-    auto code = consumeRollingCodeValue();
+    auto code = consume_rolling_code_value_();
     ESP_LOGW(TAG, "Stop call with code %u to RTS cover component %s", code, this->name_.c_str());
   } else {
     ESP_LOGW(TAG, "Invalid call to RTS cover component");
   }
 }
 
-uint16_t RTSCover::consumeRollingCodeValue() {
+uint16_t RTSCover::consume_rolling_code_value_() {
   // I have not exhaustively tested using 0 as the rolling code, but I observed it failing at
   // least once.
-  uint16_t consumedCode = this->rts_channel_.rollingCode != 0 ? this->rts_channel_.rollingCode : 1;
-  this->rts_channel_.rollingCode = consumedCode + 1;
+  uint16_t consumedCode = this->rts_channel_.rolling_code != 0 ? this->rts_channel_.rolling_code : 1;
+  this->rts_channel_.rolling_code = consumedCode + 1;
 
-  this->rtc_.save(&this->rts_channel_);
+  this->persist_channel_state_();
 
   return consumedCode;
+}
+
+void RTSCover::persist_channel_state_() {
+  if (!this->rtc_.save(&this->rts_channel_)) {
+    ESP_LOGE(TAG, "Failed to persist channel state for RTS cover %s", this->name_.c_str());
+    ESP_LOGE(TAG, "  RTS CONTROL WILL DESYNCHRONIZE IF THIS DEVICE SHUTS DOWN OR RESTARTS");
+  }
 }
 
 }  // namespace rts

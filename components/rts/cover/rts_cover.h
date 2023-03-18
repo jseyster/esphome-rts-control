@@ -5,6 +5,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/entity_base.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/optional.h"
 #include "esphome/core/preferences.h"
 
 namespace esphome {
@@ -24,6 +25,9 @@ class RTSCover : public cover::Cover, public Component {
   void setup() override final;
   cover::CoverTraits get_traits() override final;
 
+  void send_program_command();
+  void config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code);
+
   void set_restore_mode(RTSRestoreMode restore_mode) { restore_mode_ = restore_mode; }
 
  protected:
@@ -31,13 +35,15 @@ class RTSCover : public cover::Cover, public Component {
 
   // Returns an unused "rolling code" value and increments the stored rolling code value as a side
   // effect, saving it to persistent storage.
-  uint16_t consumeRollingCodeValue();
+  uint16_t consume_rolling_code_value_();
+
+  void persist_channel_state_();
 
   RTSRestoreMode restore_mode_{COVER_NO_RESTORE};
 
   struct ChannelState {
-    uint16_t channelId;
-    uint16_t rollingCode;
+    uint16_t channel_id;
+    uint16_t rolling_code;
   } __attribute__((packed)) rts_channel_;
 
   ESPPreferenceObject rtc_;

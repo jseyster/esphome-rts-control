@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
+from esphome.automation import maybe_simple_id
 from esphome.components import cover
 from esphome.const import (
     CONF_ASSUMED_STATE,
@@ -14,9 +15,11 @@ from esphome.const import (
 )
 from .. import rts_ns
 
-DEPENDENCIDES = ["rts"]
+DEPENDENCIES = ["rts"]
 
 RTSCover = rts_ns.class_("RTSCover", cover.Cover, cg.Component)
+ProgramAction = rts_ns.class_("ProgramAction", automation.Action)
+ConfigAction = rts_ns.class_("ConfigAction", automation.Action)
 
 RTSRestoreMode = rts_ns.enum("RTSRestoreMode")
 RESTORE_MODES = {
@@ -24,6 +27,9 @@ RESTORE_MODES = {
     "RESTORE": RTSRestoreMode.COVER_RESTORE,
     "RESTORE_AND_CALL": RTSRestoreMode.COVER_RESTORE_AND_CALL,
 }
+
+CONF_CHANNEL_ID = "channel_id"
+CONF_ROLLING_CODE = "rolling_code"
 
 CONFIG_SCHEMA = cover.COVER_SCHEMA.extend(
     {
@@ -62,3 +68,39 @@ async def to_code(config):
             var.get_stop_trigger(), [], config[CONF_STOP_ACTION]
         )
     cg.add(var.set_restore_mode(config[CONF_RESTORE_MODE]))
+
+@automation.register_action(
+    "rts.program",
+    ProgramAction,
+    maybe_simple_id(
+        {
+            cv.Required(CONF_ID): cv.use_id(RTSCover),
+        }
+    )
+)
+async def rts_program_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    return var
+
+@automation.register_action(
+    "rts.config_channel",
+    ConfigAction,
+    cv.Schema(
+        {
+            cv.Required(CONF_ID): cv.use_id(RTSCover),
+            cv.Optional(CONF_CHANNEL_ID): cv.templatable(cv.int_range(min=0, max=0xffff)),
+            cv.Optional(CONF_ROLLING_CODE): cv.templatable(cv.int_range(min=0, max=0xffff)),
+        }
+    )
+)
+async def rts_config_channel_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    if CONF_CHANNEL_ID in config:
+        template_ = await cg.templatable(config[CONF_CHANNEL_ID], args, int)
+        cg.add(var.set_channel_id(template_))
+    if CONF_ROLLING_CODE in config:
+        template_ = await cg.templatable(config[CONF_ROLLING_CODE], args, int)
+        cg.add(var.set_rolling_code(template_))
+    return var
