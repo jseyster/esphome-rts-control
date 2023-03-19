@@ -16,7 +16,7 @@ void RTSCover::setup() {
 
     // Choose a random channel and random start point for the rolling code. The code always starts
     // from the lower half of possible values, because I haven't tested that rollover works :).
-    this->rts_channel_.channel_id = static_cast<uint16_t>(random_uint32());
+    this->rts_channel_.channel_id = 0xffffff & random_uint32();
     this->rts_channel_.rolling_code = 0x7fff & static_cast<uint16_t>(random_uint32());
   }
   ESP_LOGI(TAG, "Initialized RTS cover %s with channel id 0x%x; next rolling code value is %u", this->name_.c_str(),

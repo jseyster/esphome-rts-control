@@ -27,6 +27,25 @@ class RTS : public Component {
   void set_transmitter(remote_transmitter::RemoteTransmitterComponent *transmitter) { transmitter_ = transmitter; }
 
  protected:
+  // Before sending the command, the transmitter sends a long wakeup signal followed by radio
+  // silence.
+  static constexpr uint32_t wakeup_signal_high_micros = 9415;
+  static constexpr uint32_t wakeup_signal_low_micros = 89565;
+
+  // Total time to transmit a Manchester-encoded bit.
+  static constexpr uint32_t symbol_micros = 1208;
+
+  // Each data packet is preceded by a square-wave sync signal.
+  static constexpr uint32_t hardware_sync_high_micros = 2 * symbol_micros;
+  static constexpr uint32_t hardware_sync_low_micros = 2 * symbol_micros;
+
+  // After the hardware sync and before data bits get transmitted, there is one last
+  // synchronization signal that ends with half a signal of silence.
+  static constexpr uint32_t software_sync_high_micros = 4550;
+  static constexpr uint32_t software_sync_low_micros = symbol_micros / 2;
+
+  static constexpr uint32_t inter_frame_gap_micros = 30415;
+
   remote_transmitter::RemoteTransmitterComponent *transmitter_;
 };
 

@@ -44,7 +44,7 @@ class RTSCover : public cover::Cover, public Component {
   RTSRestoreMode restore_mode_{COVER_NO_RESTORE};
 
   struct ChannelState {
-    uint16_t channel_id;
+    uint32_t channel_id;
     uint16_t rolling_code;
   } __attribute__((packed)) rts_channel_;
 

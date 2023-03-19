@@ -95,7 +95,7 @@ async def rts_program_to_code(config, action_id, template_arg, args):
     cv.Schema(
         {
             cv.Required(CONF_ID): cv.use_id(RTSCover),
-            cv.Optional(CONF_CHANNEL_ID): cv.templatable(cv.int_range(min=0, max=0xffff)),
+            cv.Optional(CONF_CHANNEL_ID): cv.templatable(cv.int_range(min=0, max=0xffffff)),
             cv.Optional(CONF_ROLLING_CODE): cv.templatable(cv.int_range(min=0, max=0xffff)),
         }
     )

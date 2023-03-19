@@ -83,6 +83,47 @@ void RTS::transmit_rts_command(RTSControlCode control_code, uint32_t channel_id,
            channel_id, rolling_code);
   ESP_LOGV(TAG, "Cleartext RTS packet:  %s", packet.encoded_data_as_string_().c_str());
   ESP_LOGV(TAG, "Obfuscated RTS packet: %s", packet.obfuscated_data_as_string_().c_str());
+
+  // TODO: Validate transmitter paramaters
+  auto transmit_call = this->transmitter_->transmit();
+  auto transmit_data = transmit_call.get_data();
+
+  // Wakeup pulse
+  transmit_data->item(wakeup_signal_high_micros, wakeup_signal_low_micros);
+
+  for (int i = 0; i < 2 /* TODO: Make this configurable */; i++) {
+    // Hardware sync: sent twice for the first time the frame gets sent and then 7 for each
+    // follow-up frame.
+    for (int j = 0; j < (i == 0 ? 2 : 7); j++) {
+      transmit_data->item(hardware_sync_high_micros, hardware_sync_low_micros);
+    }
+
+    // One last sync signal.
+    transmit_data->item(software_sync_high_micros, software_sync_low_micros);
+
+    // Transmit the data with Manchester encoding.
+    for (auto byte_to_transmit : packet.obfuscated_data()) {
+      for (int bit_index = 0; bit_index < 8; bit_index++) {
+        if ((byte_to_transmit & 0x80) == 0) {
+          // A 0 bit is transmitted as a falling edge.
+          transmit_data->mark(symbol_micros / 2);
+          transmit_data->space(symbol_micros / 2);
+        } else {
+          // A 1 bit is transmitted as a rising edge.
+          transmit_data->space(symbol_micros / 2);
+          transmit_data->mark(symbol_micros / 2);
+        }
+        byte_to_transmit <<= 1;
+      }
+    }
+
+    // An inter-frame gap separates repeated data packets.
+    if (i < 2 /* TODO */) {
+      transmit_data->space(inter_frame_gap_micros);
+    }
+  }
+
+  transmit_call.perform();
 }
 
 }  // namespace rts
