@@ -51,8 +51,8 @@ cover::CoverTraits RTSCover::get_traits() {
 }
 
 void RTSCover::send_program_command() {
-  auto code = consume_rolling_code_value_();
-  ESP_LOGW(TAG, "Program call with code %u to RTS cover component %s", code, this->name_.c_str());
+  this->rts_parent_->transmit_rts_command(RTS::PROGRAM, this->rts_channel_.channel_id,
+                                          this->consume_rolling_code_value_());
 }
 
 void RTSCover::config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code) {
@@ -75,18 +75,20 @@ void RTSCover::config_channel(optional<uint16_t> channel_id, optional<uint16_t> 
 
 void RTSCover::control(const cover::CoverCall &call) {
   auto position = call.get_position();
+  RTS::RTSControlCode control_code;
   if (position && *position == cover::COVER_OPEN) {
-    auto code = consume_rolling_code_value_();
-    ESP_LOGW(TAG, "Open call with code %u to RTS cover component %s", code, this->name_.c_str());
+    control_code = RTS::OPEN;
   } else if (position && *position == cover::COVER_CLOSED) {
-    auto code = consume_rolling_code_value_();
-    ESP_LOGW(TAG, "Close call with code %u to RTS cover component %s", code, this->name_.c_str());
+    control_code = RTS::CLOSE;
   } else if (call.get_stop()) {
-    auto code = consume_rolling_code_value_();
-    ESP_LOGW(TAG, "Stop call with code %u to RTS cover component %s", code, this->name_.c_str());
+    control_code = RTS::STOP;
   } else {
     ESP_LOGW(TAG, "Invalid call to RTS cover component");
+    return;
   }
+
+  this->rts_parent_->transmit_rts_command(control_code, this->rts_channel_.channel_id,
+                                          this->consume_rolling_code_value_());
 }
 
 uint16_t RTSCover::consume_rolling_code_value_() {

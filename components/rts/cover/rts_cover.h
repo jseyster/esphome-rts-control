@@ -7,6 +7,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/optional.h"
 #include "esphome/core/preferences.h"
+#include "../rts.h"
 
 namespace esphome {
 namespace rts {
@@ -28,6 +29,7 @@ class RTSCover : public cover::Cover, public Component {
   void send_program_command();
   void config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code);
 
+  void set_rts_parent(RTS *rts_parent) { rts_parent_ = rts_parent; }
   void set_restore_mode(RTSRestoreMode restore_mode) { restore_mode_ = restore_mode; }
 
  protected:
@@ -46,6 +48,7 @@ class RTSCover : public cover::Cover, public Component {
     uint16_t rolling_code;
   } __attribute__((packed)) rts_channel_;
 
+  RTS *rts_parent_;
   ESPPreferenceObject rtc_;
 };
 

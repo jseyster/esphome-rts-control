@@ -13,7 +13,7 @@ from esphome.const import (
     CONF_RESTORE_MODE,
     CONF_STOP_ACTION,
 )
-from .. import rts_ns
+from .. import RTS, rts_ns
 
 DEPENDENCIES = ["rts"]
 
@@ -30,10 +30,12 @@ RESTORE_MODES = {
 
 CONF_CHANNEL_ID = "channel_id"
 CONF_ROLLING_CODE = "rolling_code"
+CONF_RTS_ID = "rts_id"
 
 CONFIG_SCHEMA = cover.COVER_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(RTSCover),
+        cv.GenerateID(CONF_RTS_ID): cv.use_id(RTS),
         cv.Optional(CONF_ASSUMED_STATE, default=True): cv.boolean,
         cv.Optional(CONF_OPTIMISTIC, default=True): cv.boolean,
         cv.Optional(CONF_LAMBDA): cv.returning_lambda,
@@ -50,6 +52,10 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await cover.register_cover(var, config)
+
+    paren = await cg.get_variable(config[CONF_RTS_ID])
+    cg.add(var.set_rts_parent(paren))
+
     if CONF_LAMBDA in config:
         template_ = await cg.process_lambda(
             config[CONF_LAMBDA], [], return_type=cg.optional.template(float)
