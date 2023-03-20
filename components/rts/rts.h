@@ -22,9 +22,12 @@ class RTS : public Component {
     // DISABLE_SUN_DETECTOR = 0xa,
   };
 
-  void transmit_rts_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code) const;
+  void transmit_rts_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code,
+                            int max_repetitions = 16) const;
 
   void set_transmitter(remote_transmitter::RemoteTransmitterComponent *transmitter) { transmitter_ = transmitter; }
+
+  void set_command_repetitions(int command_repetitions) { this->command_repetitions_ = command_repetitions; }
 
  protected:
   // Before sending the command, the transmitter sends a long wakeup signal followed by radio
@@ -46,7 +49,13 @@ class RTS : public Component {
 
   static constexpr uint32_t inter_frame_gap_micros = 30415;
 
+  // Approximate number of data items needed to send a single command. Used to reserve space when
+  // building a TransmitCall.
+  static constexpr uint32_t transmit_items_per_command_upper_bound = 130;
+
   remote_transmitter::RemoteTransmitterComponent *transmitter_;
+
+  int command_repetitions_ = 2;
 };
 
 }  // namespace rts

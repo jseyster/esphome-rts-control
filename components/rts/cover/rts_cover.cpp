@@ -51,8 +51,13 @@ cover::CoverTraits RTSCover::get_traits() {
 }
 
 void RTSCover::send_program_command() {
+  // Note: A long repeated stretch of PROGRAM commands may trigger a motor's programming mode, which
+  // is untested and almost certainly not what the user wants.
+  // When transmission are unreliable, users are advised to place the radio transmitter as close as
+  // possible to the motor when pairing, even if the transmitter will be in a different location
+  // during normal operation.
   this->rts_parent_->transmit_rts_command(RTS::PROGRAM, this->rts_channel_.channel_id,
-                                          this->consume_rolling_code_value_());
+                                          this->consume_rolling_code_value_(), 2 /* Max repetitions */);
 }
 
 void RTSCover::config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code) {

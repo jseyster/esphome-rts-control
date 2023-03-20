@@ -76,22 +76,32 @@ class RTSPacketBody {
 
 }  // namespace
 
-void RTS::transmit_rts_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code) const {
+void RTS::transmit_rts_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code,
+                               int max_repetitions) const {
   RTSPacketBody packet(control_code, channel_id, rolling_code);
 
-  ESP_LOGD(TAG, "Transmitting RTS command -- Control code: %x, Channel id: %x, Rolling code value: %d", control_code,
+  ESP_LOGD(TAG, "Transmitting RTS command -- Control code: %x, Channel id: 0x%x, Rolling code value: %d", control_code,
            channel_id, rolling_code);
   ESP_LOGV(TAG, "Cleartext RTS packet:  %s", packet.encoded_data_as_string_().c_str());
   ESP_LOGV(TAG, "Obfuscated RTS packet: %s", packet.obfuscated_data_as_string_().c_str());
 
-  // TODO: Validate transmitter paramaters
   auto transmit_call = this->transmitter_->transmit();
   auto transmit_data = transmit_call.get_data();
+
+  if (transmit_data->get_carrier_frequency() != 0) {
+    ESP_LOGE(TAG, "Cannot transmit RTS commands over radio configured with a carrier frequency");
+    return;
+  }
+
+  // Reserve bytes in the transmit buffer: 2 for the wakeup pulse plus the maximum possible items
+  // needed for each data frame.
+  auto repetitions = std::min(this->command_repetitions_, max_repetitions);
+  transmit_data->reserve(repetitions * transmit_items_per_command_upper_bound);
 
   // Wakeup pulse
   transmit_data->item(wakeup_signal_high_micros, wakeup_signal_low_micros);
 
-  for (int i = 0; i < 2 /* TODO: Make this configurable */; i++) {
+  for (int i = 0; i < repetitions; i++) {
     // Hardware sync: sent twice for the first time the frame gets sent and then 7 for each
     // follow-up frame.
     for (int j = 0; j < (i == 0 ? 2 : 7); j++) {
@@ -118,7 +128,7 @@ void RTS::transmit_rts_command(RTSControlCode control_code, uint32_t channel_id,
     }
 
     // An inter-frame gap separates repeated data packets.
-    if (i < 2 /* TODO */) {
+    if (i < repetitions) {
       transmit_data->space(inter_frame_gap_micros);
     }
   }
