@@ -32,6 +32,10 @@ class RTSCover : public cover::Cover, public Component {
   void set_rts_parent(RTS *rts_parent) { rts_parent_ = rts_parent; }
   void set_restore_mode(RTSRestoreMode restore_mode) { restore_mode_ = restore_mode; }
 
+  void add_on_channel_update_callback(std::function<void(uint32_t, uint16_t)> &&f) {
+    this->channel_update_callback_.add(std::move(f));
+  }
+
  protected:
   void control(const cover::CoverCall &call) override final;
 
@@ -50,6 +54,8 @@ class RTSCover : public cover::Cover, public Component {
 
   RTS *rts_parent_;
   ESPPreferenceObject rtc_;
+
+  CallbackManager<void(uint32_t, uint16_t)> channel_update_callback_{};
 };
 
 }  // namespace rts

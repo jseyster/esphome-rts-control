@@ -83,8 +83,10 @@ void RTSCover::control(const cover::CoverCall &call) {
   RTS::RTSControlCode control_code;
   if (position && *position == cover::COVER_OPEN) {
     control_code = RTS::OPEN;
+    this->position = cover::COVER_OPEN;
   } else if (position && *position == cover::COVER_CLOSED) {
     control_code = RTS::CLOSE;
+    this->position = cover::COVER_CLOSED;
   } else if (call.get_stop()) {
     control_code = RTS::STOP;
   } else {
@@ -94,6 +96,8 @@ void RTSCover::control(const cover::CoverCall &call) {
 
   this->rts_parent_->transmit_rts_command(control_code, this->rts_channel_.channel_id,
                                           this->consume_rolling_code_value_());
+
+  this->publish_state();
 }
 
 uint16_t RTSCover::consume_rolling_code_value_() {
@@ -112,6 +116,8 @@ void RTSCover::persist_channel_state_() {
     ESP_LOGE(TAG, "Failed to persist channel state for RTS cover %s", this->name_.c_str());
     ESP_LOGE(TAG, "  RTS CONTROL WILL DESYNCHRONIZE IF THIS DEVICE SHUTS DOWN OR RESTARTS");
   }
+
+  this->channel_update_callback_.call(this->rts_channel_.channel_id, this->rts_channel_.rolling_code);
 }
 
 }  // namespace rts

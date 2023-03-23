@@ -128,7 +128,7 @@ void RTS::transmit_rts_command(RTSControlCode control_code, uint32_t channel_id,
     }
 
     // An inter-frame gap separates repeated data packets.
-    if (i < repetitions) {
+    if (i + 1 < repetitions) {
       transmit_data->space(inter_frame_gap_micros);
     }
   }
