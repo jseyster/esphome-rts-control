@@ -36,7 +36,7 @@ template<typename... Ts> class ConfigAction : public Action<Ts...> {
       rolling_code = static_cast<uint16_t>(this->rolling_code_.value(x...));
     }
 
-    cover_->config_channel(channel_id, rolling_code);
+    cover_->rts_channel().config_channel(channel_id, rolling_code);
   }
 
  protected:

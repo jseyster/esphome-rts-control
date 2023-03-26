@@ -8,6 +8,7 @@
 #include "esphome/core/optional.h"
 #include "esphome/core/preferences.h"
 #include "../rts.h"
+#include "../rts_channel.h"
 
 namespace esphome {
 namespace rts {
@@ -27,33 +28,19 @@ class RTSCover : public cover::Cover, public Component {
   cover::CoverTraits get_traits() override final;
 
   void send_program_command();
-  void config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code);
 
   void set_rts_parent(RTS *rts_parent) { rts_parent_ = rts_parent; }
   void set_restore_mode(RTSRestoreMode restore_mode) { restore_mode_ = restore_mode; }
 
-  void add_on_channel_update_callback(std::function<void(uint32_t, uint16_t)> &&f) {
-    this->channel_update_callback_.add(std::move(f));
-  }
+  RTSChannel &rts_channel() { return rts_channel_; }
 
  protected:
   void control(const cover::CoverCall &call) override final;
 
-  // Returns an unused "rolling code" value and increments the stored rolling code value as a side
-  // effect, saving it to persistent storage.
-  uint16_t consume_rolling_code_value_();
-
-  void persist_channel_state_();
-
   RTSRestoreMode restore_mode_{COVER_NO_RESTORE};
 
-  struct ChannelState {
-    uint32_t channel_id;
-    uint16_t rolling_code;
-  } __attribute__((packed)) rts_channel_;
-
   RTS *rts_parent_;
-  ESPPreferenceObject rtc_;
+  RTSChannel rts_channel_;
 
   CallbackManager<void(uint32_t, uint16_t)> channel_update_callback_{};
 };

@@ -76,8 +76,10 @@ class RTSPacketBody {
 
 }  // namespace
 
-void RTS::transmit_rts_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code,
-                               int max_repetitions) const {
+void RTS::transmit_rts_command(RTSControlCode control_code, RTSChannel *rts_channel, int max_repetitions) const {
+  auto channel_id = rts_channel->id();
+  auto rolling_code = rts_channel->consume_rolling_code_value();
+
   RTSPacketBody packet(control_code, channel_id, rolling_code);
 
   ESP_LOGD(TAG, "Transmitting RTS command -- Control code: %x, Channel id: 0x%x, Rolling code value: %d", control_code,

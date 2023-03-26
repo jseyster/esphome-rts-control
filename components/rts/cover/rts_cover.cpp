@@ -9,18 +9,7 @@ static const char *const TAG = "rts.cover";
 void RTSCover::setup() {
   ESP_LOGCONFIG(TAG, "Setting up RTS cover '%s'...", this->name_.c_str());
 
-  this->rtc_ = global_preferences->make_preference<ChannelState>(this->get_object_id_hash());
-  if (!this->rtc_.load(&this->rts_channel_)) {
-    ESP_LOGW(TAG, "Failed to load channel information (INCLUDING ROLLING CODE) for RTS cover: %s", this->name_.c_str());
-    ESP_LOGW(TAG, "Entity will be initialized as a NEW REMOTE with a random channel id");
-
-    // Choose a random channel and random start point for the rolling code. The code always starts
-    // from the lower half of possible values, because I haven't tested that rollover works :).
-    this->rts_channel_.channel_id = 0xffffff & random_uint32();
-    this->rts_channel_.rolling_code = 0x7fff & static_cast<uint16_t>(random_uint32());
-  }
-  ESP_LOGI(TAG, "Initialized RTS cover %s with channel id 0x%x; next rolling code value is %u", this->name_.c_str(),
-           this->rts_channel_.channel_id, this->rts_channel_.rolling_code);
+  this->rts_channel_.init(this->get_object_id_hash(), this->name_);
 
   switch (this->restore_mode_) {
     case COVER_NO_RESTORE:
@@ -56,26 +45,7 @@ void RTSCover::send_program_command() {
   // When transmission are unreliable, users are advised to place the radio transmitter as close as
   // possible to the motor when pairing, even if the transmitter will be in a different location
   // during normal operation.
-  this->rts_parent_->transmit_rts_command(RTS::PROGRAM, this->rts_channel_.channel_id,
-                                          this->consume_rolling_code_value_(), 2 /* Max repetitions */);
-}
-
-void RTSCover::config_channel(optional<uint16_t> channel_id, optional<uint16_t> rolling_code) {
-  if (channel_id.has_value()) {
-    ESP_LOGI(TAG, "Assigning new channel id to RTS cover component %s: previously %x, now %x", this->name_.c_str(),
-             this->rts_channel_.channel_id, channel_id.value());
-    this->rts_channel_.channel_id = channel_id.value();
-  }
-  if (rolling_code.has_value()) {
-    ESP_LOGI(TAG, "Updating next rolling code value for RTS cover component %s: previously %u, now %u",
-             this->name_.c_str(), this->rts_channel_.rolling_code, rolling_code.value());
-    this->rts_channel_.rolling_code = rolling_code.value();
-  }
-  if (!channel_id.has_value() && !rolling_code.has_value()) {
-    ESP_LOGW(TAG, "RTS cover component %s received no-op 'config_channel' action", this->name_.c_str());
-  }
-
-  this->persist_channel_state_();
+  this->rts_parent_->transmit_rts_command(RTS::PROGRAM, &this->rts_channel_, 2 /* Max repetitions */);
 }
 
 void RTSCover::control(const cover::CoverCall &call) {
@@ -90,34 +60,13 @@ void RTSCover::control(const cover::CoverCall &call) {
   } else if (call.get_stop()) {
     control_code = RTS::STOP;
   } else {
-    ESP_LOGW(TAG, "Invalid call to RTS cover component");
+    ESP_LOGE(TAG, "Invalid call to RTS cover component: 0x%x", control_code);
     return;
   }
 
-  this->rts_parent_->transmit_rts_command(control_code, this->rts_channel_.channel_id,
-                                          this->consume_rolling_code_value_());
+  this->rts_parent_->transmit_rts_command(control_code, &this->rts_channel_);
 
   this->publish_state();
-}
-
-uint16_t RTSCover::consume_rolling_code_value_() {
-  // I have not exhaustively tested using 0 as the rolling code, but I observed it failing at
-  // least once.
-  uint16_t consumedCode = this->rts_channel_.rolling_code != 0 ? this->rts_channel_.rolling_code : 1;
-  this->rts_channel_.rolling_code = consumedCode + 1;
-
-  this->persist_channel_state_();
-
-  return consumedCode;
-}
-
-void RTSCover::persist_channel_state_() {
-  if (!this->rtc_.save(&this->rts_channel_)) {
-    ESP_LOGE(TAG, "Failed to persist channel state for RTS cover %s", this->name_.c_str());
-    ESP_LOGE(TAG, "  RTS CONTROL WILL DESYNCHRONIZE IF THIS DEVICE SHUTS DOWN OR RESTARTS");
-  }
-
-  this->channel_update_callback_.call(this->rts_channel_.channel_id, this->rts_channel_.rolling_code);
 }
 
 }  // namespace rts

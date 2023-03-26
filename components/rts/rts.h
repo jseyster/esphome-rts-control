@@ -3,6 +3,7 @@
 #include "esphome/components/remote_base/remote_base.h"
 #include "esphome/components/remote_transmitter/remote_transmitter.h"
 #include "esphome/core/component.h"
+#include "rts_channel.h"
 
 namespace esphome {
 namespace rts {
@@ -22,8 +23,7 @@ class RTS : public Component {
     // DISABLE_SUN_DETECTOR = 0xa,
   };
 
-  void transmit_rts_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code,
-                            int max_repetitions = 16) const;
+  void transmit_rts_command(RTSControlCode control_code, RTSChannel *rts_channel, int max_repetitions = 16) const;
 
   void set_transmitter(remote_transmitter::RemoteTransmitterComponent *transmitter) { transmitter_ = transmitter; }
 
