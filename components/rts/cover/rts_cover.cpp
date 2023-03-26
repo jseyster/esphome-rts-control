@@ -45,7 +45,7 @@ void RTSCover::send_program_command() {
   // When transmission are unreliable, users are advised to place the radio transmitter as close as
   // possible to the motor when pairing, even if the transmitter will be in a different location
   // during normal operation.
-  this->rts_parent_->transmit_rts_command(RTS::PROGRAM, &this->rts_channel_, 2 /* Max repetitions */);
+  this->rts_parent_->schedule_rts_command(RTS::PROGRAM, &this->rts_channel_, 2 /* Max repetitions */);
 }
 
 void RTSCover::control(const cover::CoverCall &call) {
@@ -64,7 +64,7 @@ void RTSCover::control(const cover::CoverCall &call) {
     return;
   }
 
-  this->rts_parent_->transmit_rts_command(control_code, &this->rts_channel_);
+  this->rts_parent_->schedule_rts_command(control_code, &this->rts_channel_);
 
   this->publish_state();
 }

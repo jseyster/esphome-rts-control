@@ -76,66 +76,133 @@ class RTSPacketBody {
 
 }  // namespace
 
-void RTS::transmit_rts_command(RTSControlCode control_code, RTSChannel *rts_channel, int max_repetitions) const {
-  auto channel_id = rts_channel->id();
-  auto rolling_code = rts_channel->consume_rolling_code_value();
+void RTS::schedule_rts_command(RTSControlCode control_code, RTSChannel *rts_channel, int max_repetitions) {
+  ScheduledCommand command;
+  command.control_code = control_code;
+  command.channel_id = rts_channel->id();
+  command.rolling_code = rts_channel->consume_rolling_code_value();
+  command.num_repetitions = std::min(this->command_repetitions_, max_repetitions);
+  command.num_completed_repetitions = 0;
+  this->scheduled_commands_.push(command);
 
+  if (!this->is_transmit_task_scheduled_) {
+    ESP_LOGD(TAG, "Scheduling RTS transmission handler");
+    this->defer([this]() { this->process_one_scheduled_command(); });
+    this->is_transmit_task_scheduled_ = true;
+  } else {
+    // The already scheduled transmission handler will reschedule itself to handle newly enqueued
+    // commands.
+    ESP_LOGV(TAG, "RTS transmission handler already active");
+  }
+}
+
+void RTS::process_one_scheduled_command(bool abbreviated_sync) {
+  if (this->scheduled_commands_.empty()) {
+    this->is_transmit_task_scheduled_ = false;
+    ESP_LOGD(TAG, "Completed all scheduled RTS commands");
+    return;
+  } else if (this->failure_observed_) {
+    this->is_transmit_task_scheduled_ = false;
+    this->failure_observed_ = false;
+    ESP_LOGE(TAG, "Canceling scheduled RTS commands");
+    this->scheduled_commands_ = {};
+    return;
+  }
+
+  uint32_t transmission_delay = 0;
+  if (this->needs_wakeup_) {
+    ESP_LOGD(TAG, "Transmitting wakeup signal");
+    transmission_delay = this->transmit_wakeup();
+  } else {
+    auto &command = this->scheduled_commands_.front();
+
+    if (command.num_completed_repetitions == 0) {
+      ESP_LOGD(TAG, "Transmitting RTS command -- Control code: 0x%x, Channel id: 0x%x, Rolling code value: %d",
+               command.control_code, command.channel_id, command.rolling_code);
+    } else {
+      ESP_LOGV(TAG, "Repeating RTS command on channel 0x%x", command.channel_id);
+    }
+
+    transmission_delay =
+        this->transmit_command(command.control_code, command.channel_id, command.rolling_code, abbreviated_sync);
+
+    if (++command.num_completed_repetitions >= command.num_repetitions) {
+      this->scheduled_commands_.pop();
+    }
+  }
+
+  this->set_timeout(transmission_delay, [this]() { this->process_one_scheduled_command(true); });
+}
+
+uint32_t RTS::transmit_wakeup() {
+  auto transmit_call = this->transmitter_->transmit();
+  auto transmit_data = transmit_call.get_data();
+
+  if (transmit_data->get_carrier_frequency() != 0) {
+    ESP_LOGE(TAG, "Cannot transmit RTS commands over radio configured with a carrier frequency");
+
+    // Return control to the transmission loop without delay.
+    return 0;
+  }
+
+  transmit_data->mark(wakeup_signal_high_micros);
+  transmit_call.perform();
+
+  // Begin the 10 second cooldown period for sending wakeup signals.
+  this->set_timeout(wakeup_cooldown_millis, [this]() { this->needs_wakeup_ = true; });
+  this->needs_wakeup_ = false;
+
+  // Delay further transmission for 90ms.
+  return wakeup_signal_low_millis;
+}
+
+uint32_t RTS::transmit_command(RTSControlCode control_code, uint32_t channel_id, uint16_t rolling_code,
+                               bool abbreviated_sync) {
   RTSPacketBody packet(control_code, channel_id, rolling_code);
 
-  ESP_LOGD(TAG, "Transmitting RTS command -- Control code: %x, Channel id: 0x%x, Rolling code value: %d", control_code,
-           channel_id, rolling_code);
-  ESP_LOGV(TAG, "Cleartext RTS packet:  %s", packet.encoded_data_as_string_().c_str());
-  ESP_LOGV(TAG, "Obfuscated RTS packet: %s", packet.obfuscated_data_as_string_().c_str());
+  ESP_LOGVV(TAG, "Cleartext RTS packet:  %s", packet.encoded_data_as_string_().c_str());
+  ESP_LOGVV(TAG, "Obfuscated RTS packet: %s", packet.obfuscated_data_as_string_().c_str());
 
   auto transmit_call = this->transmitter_->transmit();
   auto transmit_data = transmit_call.get_data();
 
   if (transmit_data->get_carrier_frequency() != 0) {
     ESP_LOGE(TAG, "Cannot transmit RTS commands over radio configured with a carrier frequency");
-    return;
+
+    // Return control to the transmission loop without delay.
+    return 0;
   }
 
-  // Reserve bytes in the transmit buffer: 2 for the wakeup pulse plus the maximum possible items
-  // needed for each data frame.
-  auto repetitions = std::min(this->command_repetitions_, max_repetitions);
-  transmit_data->reserve(repetitions * transmit_items_per_command_upper_bound);
+  transmit_data->reserve(transmit_items_per_command_upper_bound);
 
-  // Wakeup pulse
-  transmit_data->item(wakeup_signal_high_micros, wakeup_signal_low_micros);
+  // Hardware sync: sent twice immediately after a wakeup signal or 7 times otherwise.
+  for (int j = 0; j < (abbreviated_sync ? 2 : 7); j++) {
+    transmit_data->item(hardware_sync_high_micros, hardware_sync_low_micros);
+  }
 
-  for (int i = 0; i < repetitions; i++) {
-    // Hardware sync: sent twice for the first time the frame gets sent and then 7 for each
-    // follow-up frame.
-    for (int j = 0; j < (i == 0 ? 2 : 7); j++) {
-      transmit_data->item(hardware_sync_high_micros, hardware_sync_low_micros);
-    }
+  // One last sync signal.
+  transmit_data->item(software_sync_high_micros, software_sync_low_micros);
 
-    // One last sync signal.
-    transmit_data->item(software_sync_high_micros, software_sync_low_micros);
-
-    // Transmit the data with Manchester encoding.
-    for (auto byte_to_transmit : packet.obfuscated_data()) {
-      for (int bit_index = 0; bit_index < 8; bit_index++) {
-        if ((byte_to_transmit & 0x80) == 0) {
-          // A 0 bit is transmitted as a falling edge.
-          transmit_data->mark(symbol_micros / 2);
-          transmit_data->space(symbol_micros / 2);
-        } else {
-          // A 1 bit is transmitted as a rising edge.
-          transmit_data->space(symbol_micros / 2);
-          transmit_data->mark(symbol_micros / 2);
-        }
-        byte_to_transmit <<= 1;
+  // Transmit the data with Manchester encoding.
+  for (auto byte_to_transmit : packet.obfuscated_data()) {
+    for (int bit_index = 0; bit_index < 8; bit_index++) {
+      if ((byte_to_transmit & 0x80) == 0) {
+        // A 0 bit is transmitted as a falling edge.
+        transmit_data->mark(symbol_micros / 2);
+        transmit_data->space(symbol_micros / 2);
+      } else {
+        // A 1 bit is transmitted as a rising edge.
+        transmit_data->space(symbol_micros / 2);
+        transmit_data->mark(symbol_micros / 2);
       }
-    }
-
-    // An inter-frame gap separates repeated data packets.
-    if (i + 1 < repetitions) {
-      transmit_data->space(inter_frame_gap_micros);
+      byte_to_transmit <<= 1;
     }
   }
 
   transmit_call.perform();
+
+  // Delay further transmission for 30ms.
+  return inter_frame_gap_millis;
 }
 
 }  // namespace rts
