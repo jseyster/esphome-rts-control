@@ -3,16 +3,7 @@ import esphome.config_validation as cv
 from esphome import automation
 from esphome.automation import maybe_simple_id
 from esphome.components import cover
-from esphome.const import (
-    CONF_ASSUMED_STATE,
-    CONF_CLOSE_ACTION,
-    CONF_ID,
-    CONF_LAMBDA,
-    CONF_OPEN_ACTION,
-    CONF_OPTIMISTIC,
-    CONF_RESTORE_MODE,
-    CONF_STOP_ACTION,
-)
+from esphome.const import (CONF_ID, CONF_RESTORE_MODE)
 from .. import RTS, rts_ns
 
 DEPENDENCIES = ["rts"]
@@ -36,12 +27,6 @@ CONFIG_SCHEMA = cover.COVER_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(RTSCover),
         cv.GenerateID(CONF_RTS_ID): cv.use_id(RTS),
-        cv.Optional(CONF_ASSUMED_STATE, default=True): cv.boolean,
-        cv.Optional(CONF_OPTIMISTIC, default=True): cv.boolean,
-        cv.Optional(CONF_LAMBDA): cv.returning_lambda,
-        cv.Optional(CONF_OPEN_ACTION): automation.validate_automation(single=True),
-        cv.Optional(CONF_CLOSE_ACTION): automation.validate_automation(single=True),
-        cv.Optional(CONF_STOP_ACTION): automation.validate_automation(single=True),
         cv.Optional(CONF_RESTORE_MODE, default="NO_RESTORE"): cv.enum(
             RESTORE_MODES, upper=True
         ),
@@ -55,24 +40,6 @@ async def to_code(config):
 
     paren = await cg.get_variable(config[CONF_RTS_ID])
     cg.add(var.set_rts_parent(paren))
-
-    if CONF_LAMBDA in config:
-        template_ = await cg.process_lambda(
-            config[CONF_LAMBDA], [], return_type=cg.optional.template(float)
-        )
-        cg.add(var.set_state_lambda(template_))
-    if CONF_OPEN_ACTION in config:
-        await automation.build_automation(
-            var.get_open_trigger(), [], config[CONF_OPEN_ACTION]
-        )
-    if CONF_CLOSE_ACTION in config:
-        await automation.build_automation(
-            var.get_close_trigger(), [], config[CONF_CLOSE_ACTION]
-        )
-    if CONF_STOP_ACTION in config:
-        await automation.build_automation(
-            var.get_stop_trigger(), [], config[CONF_STOP_ACTION]
-        )
     cg.add(var.set_restore_mode(config[CONF_RESTORE_MODE]))
 
 @automation.register_action(
