@@ -76,6 +76,11 @@ class RTSPacketBody {
 
 }  // namespace
 
+void RTS::dump_config() {
+  ESP_LOGCONFIG(TAG, "RTS:");
+  ESP_LOGCONFIG(TAG, "  Number of times to repeat commands: %d", this->command_repetitions_);
+}
+
 void RTS::schedule_rts_command(RTSControlCode control_code, RTSChannel *rts_channel, int max_repetitions) {
   ScheduledCommand command;
   command.control_code = control_code;

@@ -1,10 +1,10 @@
 #include "rts_channel_sensor.h"
 #include "esphome/core/log.h"
 
-static const char *const TAG = "rts.sensor";
-
 namespace esphome {
 namespace rts {
+
+static const char *const TAG = "rts.sensor";
 
 void RTSChannelSensor::setup() {
   ESP_LOGCONFIG(TAG, "Setting up RTS channel sensor for cover '%s'...", this->rts_cover_->get_name().c_str());
@@ -17,6 +17,12 @@ void RTSChannelSensor::setup() {
       this->rolling_code_sensor_->publish_state(rolling_code);
     }
   });
+}
+
+void RTSChannelSensor::dump_config() {
+  ESP_LOGCONFIG(TAG, "RTS Channel Sensor");
+  LOG_SENSOR("  ", "Channel id sensor", this->channel_id_sensor_);
+  LOG_SENSOR("  ", "Rolling code sensor", this->rolling_code_sensor_);
 }
 
 }  // namespace rts

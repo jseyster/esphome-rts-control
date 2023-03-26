@@ -15,6 +15,7 @@ class RTSChannelSensor : public Component {
 
  public:
   void setup() override final;
+  void dump_config() override final;
 
   void set_rts_cover(RTSCover *rts_cover) { this->rts_cover_ = rts_cover; }
 

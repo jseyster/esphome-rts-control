@@ -25,6 +25,8 @@ class RTS : public Component {
     // DISABLE_SUN_DETECTOR = 0xa,
   };
 
+  void dump_config() override final;
+
   void schedule_rts_command(RTSControlCode control_code, RTSChannel *rts_channel, int max_repetitions = 16);
 
   void set_transmitter(remote_transmitter::RemoteTransmitterComponent *transmitter) { transmitter_ = transmitter; }

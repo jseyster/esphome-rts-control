@@ -30,6 +30,11 @@ void RTSCover::setup() {
   }
 }
 
+void RTSCover::dump_config() {
+  LOG_COVER("", "RTS Cover", this);
+  ESP_LOGCONFIG(TAG, "  RTS Cover:");
+}
+
 cover::CoverTraits RTSCover::get_traits() {
   cover::CoverTraits traits;
   traits.set_is_assumed_state(true);

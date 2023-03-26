@@ -21,10 +21,8 @@ enum RTSRestoreMode {
 
 class RTSCover : public cover::Cover, public Component {
  public:
-  RTSCover() {}
-  virtual ~RTSCover() = default;
-
   void setup() override final;
+  void dump_config() override final;
   cover::CoverTraits get_traits() override final;
 
   void send_program_command();
