@@ -41,6 +41,7 @@ cover::CoverTraits RTSCover::get_traits() {
   traits.set_supports_position(false);
   traits.set_supports_tilt(false);
   traits.set_supports_toggle(false);
+  traits.set_supports_stop(true);
   return traits;
 }
 
